@@ -1,10 +1,3 @@
-
-'''Trains a simple convnet on the MNIST dataset.
-Gets to 99.25% test accuracy after 12 epochs
-(there is still a lot of margin for parameter tuning).
-16 seconds per epoch on a GRID K520 GPU.
-'''
-
 from __future__ import print_function
 import keras
 from keras.datasets import mnist
@@ -12,14 +5,16 @@ from keras.models import Sequential
 from keras.layers import Dense, Dropout, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 from keras import backend as K
+from keras.models import model_from_json
 
+import matplotlib.pyplot as plt
 import glob
 import numpy as np
 import scipy
 
-batch_size = 16
-num_classes = 3
-epochs = 30
+batch_size = 32
+num_classes = 4
+epochs = 25
 
 def get_label(pos, len_A, len_B, len_C = 0, len_D = 0, len_E = 0):
     a = len_A
@@ -60,12 +55,12 @@ else:
 train_list_A = glob.glob('A*_gr_28_train/*.png')
 train_list_B = glob.glob('B*_gr_28_train/*.png')
 train_list_C = glob.glob('C*_gr_28_train/*.png')
-train_list_D = [] # glob.glob('D*_gr_28_train/*.png')
+train_list_D = glob.glob('D*_gr_28_train/*.png')
 train_list = train_list_A + train_list_B + train_list_C + train_list_D
 eval_list_A = glob.glob('A*_gr_28_test/*.png')
 eval_list_B = glob.glob('B*_gr_28_test/*.png')
 eval_list_C = glob.glob('C*_gr_28_test/*.png')
-eval_list_D = [] # glob.glob('D*_gr_28_test/*.png')
+eval_list_D = glob.glob('D*_gr_28_test/*.png')
 eval_list = eval_list_A + eval_list_B + eval_list_C + eval_list_D
 
 np.set_printoptions(precision=3, threshold=100000)
@@ -91,7 +86,6 @@ y_train = y_train[perm]
 
 x_train = np.expand_dims(x_train, axis=3)
 x_test = np.expand_dims(x_test, axis=3)
-
 
 x_train = x_train.astype('float32')
 x_test = x_test.astype('float32')
@@ -124,11 +118,55 @@ model.compile(loss=keras.losses.categorical_crossentropy,
               optimizer=keras.optimizers.Adadelta(),
               metrics=['accuracy'])
 
-model.fit(x_train, y_train,
+history = model.fit(x_train, y_train,
           batch_size=batch_size,
           epochs=epochs,
-          verbose=2,
+          verbose=1,
           validation_data=(x_test, y_test))
 score = model.evaluate(x_test, y_test, verbose=1)
+print('Test loss:', score[0])
+print('Test accuracy:', score[1])
+
+# summarize history for accuracy
+plt.plot(history.history['acc'])
+plt.plot(history.history['val_acc'])
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
+# summarize history for loss
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
+
+
+# serialize model to JSON
+model_json = model.to_json()
+with open("model.json", "w") as json_file:
+    json_file.write(model_json)
+# serialize weights to HDF5
+model.save_weights("model.h5")
+print("Saved model to disk")
+
+# load json and create model
+json_file = open('model.json', 'r')
+loaded_model_json = json_file.read()
+json_file.close()
+loaded_model = model_from_json(loaded_model_json)
+# load weights into new model
+loaded_model.load_weights("model.h5")
+print("Loaded model from disk")
+
+# evaluate loaded model on test data
+loaded_model.compile(loss=keras.losses.categorical_crossentropy,
+              optimizer=keras.optimizers.Adadelta(),
+              metrics=['accuracy'])
+score = loaded_model.evaluate(x_test, y_test, verbose=2)
+#print("%s: %.2f%%" % (loaded_model.metrics_names[1], score[1] * 100))
 print('Test loss:', score[0])
 print('Test accuracy:', score[1])
